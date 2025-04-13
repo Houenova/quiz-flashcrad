@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flashcard Cá Nhân</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 10px;
+        }
+        
+        .group-management {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .add-card {
+            margin-bottom: 20px;
+        }
+        
+        input[type="text"] {
+            width: 200px;
+            padding: 8px;
+            margin-right: 10px;
+        }
+        
+        button {
+            padding: 8px 15px;
+            color: rgba(224, 28, 28, 0.788);
+            border: none;
+            cursor: pointer;
+        }
+        
+        .flashcard {
+            background: #ffffff;
+            border: 1px solid #000000;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        
+        .flashcard:hover {
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        #quiz-container {
+            margin-top: 30px;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 8px;
+        }
+        
+        #quiz-answer {
+            padding: 8px;
+            width: 300px;
+            margin: 10px 0;
+        }
+        
+        .correct {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .wrong {
+            color: #f44336;
+            font-weight: bold;
+        }
+        
+        #group-select {
+            padding: 8px;
+            flex-grow: 1;
+            min-width: 200px;
+        }
+        
+        .quiz-button {
+            background: #2196F3;
+        }
+        
+        .delete-group-btn {
+            background: #e9e5e5;
+        }
+    </style>
+</head>
+<body>
+    <div class="group-management">
+        <input type="text" id="new-group" placeholder="Tên nhóm mới">
+        <button onclick="createGroup()">Tạo nhóm</button>
+        <select id="group-select" onchange="changeGroup(this.value)"></select>
+        <button class="delete-group-btn" onclick="deleteCurrentGroup()">Xóa nhóm</button>
+    </div>
+
+    <h1>Flashcard của bạn</h1>
+    
+    <div class="add-card">
+        <input type="text" id="question" placeholder="Câu hỏi...">
+        <input type="text" id="answer" placeholder="Câu trả lời...">
+        <button onclick="addCard()">Thêm thẻ</button>
+    </div>
+
+    <button class="quiz-button" onclick="startQuiz()">Bắt đầu Quiz</button>
+
+    <div id="quiz-container" class="hidden">
+        <div id="quiz-question"></div>
+        <input type="text" id="quiz-answer" placeholder="Nhập câu trả lời...">
+        <button onclick="checkAnswer()">Kiểm tra</button>
+        <div id="quiz-feedback"></div>
+        <div id="quiz-score"></div>
+    </div>
+
+    <div id="flashcards"></div>
+
+    <script>
+        let groups = JSON.parse(localStorage.getItem('groups')) || [
+            { id: 'default', name: 'Mặc định', cards: [] }
+        ];
+        let currentGroupId = 'default';
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let quizMode = false;
+
+        // Khởi tạo nhóm
+        function initGroups() {
+            const select = document.getElementById('group-select');
+            select.innerHTML = groups.map(group => `
+                <option value="${group.id}" ${group.id === currentGroupId ? 'selected' : ''}>
+                    ${group.name} (${group.cards.length} thẻ)
+                </option>
+            `).join('');
+        }
+
+        function createGroup() {
+            const groupName = document.getElementById('new-group').value.trim();
+            if (!groupName) return;
+            
+            const newGroup = {
+                id: Date.now().toString(),
+                name: groupName,
+                cards: []
+            };
+            
+            groups.push(newGroup);
+            localStorage.setItem('groups', JSON.stringify(groups));
+            initGroups();
+            document.getElementById('new-group').value = '';
+        }
+
+        function changeGroup(groupId) {
+            currentGroupId = groupId;
+            renderCards();
+        }
+
+        function deleteCurrentGroup() {
+            if (currentGroupId === 'default') {
+                alert("Không thể xóa nhóm mặc định!");
+                return;
+            }
+            
+            if (confirm("Xóa nhóm này và toàn bộ thẻ bên trong?")) {
+                groups = groups.filter(g => g.id !== currentGroupId);
+                currentGroupId = 'default';
+                saveGroups();
+                initGroups();
+                renderCards();
+            }
+        }
+
+        function startQuiz() {
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            if (currentGroup.cards.length === 0) {
+                alert("Vui lòng thêm thẻ vào nhóm này trước!");
+                return;
+            }
+            
+            quizMode = true;
+            currentQuestionIndex = 0;
+            score = 0;
+            document.getElementById('quiz-container').classList.remove('hidden');
+            document.getElementById('flashcards').classList.add('hidden');
+            document.querySelector('.add-card').classList.add('hidden');
+            showNextQuestion();
+        }
+
+        function showNextQuestion() {
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            if (currentQuestionIndex >= currentGroup.cards.length) {
+                endQuiz();
+                return;
+            }
+            
+            const quizQuestion = document.getElementById('quiz-question');
+            quizQuestion.textContent = currentGroup.cards[currentQuestionIndex].question;
+            document.getElementById('quiz-answer').value = '';
+            document.getElementById('quiz-feedback').innerHTML = '';
+        }
+
+        function checkAnswer() {
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            const userAnswer = document.getElementById('quiz-answer').value.trim().toLowerCase();
+            const correctAnswer = currentGroup.cards[currentQuestionIndex].answer.trim().toLowerCase();
+            const feedback = document.getElementById('quiz-feedback');
+
+            if (userAnswer === correctAnswer) {
+                feedback.innerHTML = '<span class="correct">Correct! 🎉</span>';
+                score++;
+            } else {
+                feedback.innerHTML = `
+                    <span class="wrong">Sai rồi 😢</span>
+                    <div>Đáp án đúng: ${currentGroup.cards[currentQuestionIndex].answer}</div>
+                `;
+            }
+
+            currentQuestionIndex++;
+            setTimeout(showNextQuestion, 1500);
+        }
+
+        function endQuiz() {
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            document.getElementById('quiz-container').classList.add('hidden');
+            document.getElementById('flashcards').classList.remove('hidden');
+            document.querySelector('.add-card').classList.remove('hidden');
+            
+            alert(`Kết thúc! Điểm của bạn: ${score}/${currentGroup.cards.length}`);
+            quizMode = false;
+        }
+
+        function renderCards() {
+            const container = document.getElementById('flashcards');
+            container.innerHTML = '';
+            
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            if (!currentGroup) return;
+
+            currentGroup.cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'flashcard';
+                cardEl.innerHTML = `
+                    <div>${card.question}</div>
+                    <div class="${card.showAnswer ? '' : 'hidden'}">${card.answer}</div>
+                    <button onclick="deleteCard(${index})">Xóa</button>
+                `;
+
+                cardEl.addEventListener('click', () => {
+                    currentGroup.cards[index].showAnswer = !currentGroup.cards[index].showAnswer;
+                    saveGroups();
+                    renderCards();
+                });
+
+                container.appendChild(cardEl);
+            });
+        }
+
+        function addCard() {
+            const question = document.getElementById('question').value;
+            const answer = document.getElementById('answer').value;
+            
+            if (question && answer) {
+                const currentGroup = groups.find(g => g.id === currentGroupId);
+                currentGroup.cards.push({
+                    question,
+                    answer,
+                    showAnswer: false
+                });
+                saveGroups();
+                renderCards();
+                document.getElementById('question').value = '';
+                document.getElementById('answer').value = '';
+            }
+        }
+
+        function deleteCard(index) {
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            currentGroup.cards.splice(index, 1);
+            saveGroups();
+            renderCards();
+        }
+
+        function saveGroups() {
+            localStorage.setItem('groups', JSON.stringify(groups));
+        }
+
+        // Khởi tạo ban đầu
+        initGroups();
+        renderCards();
+
+        // Xử lý phím Enter trong quiz
+        document.getElementById('quiz-answer').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') checkAnswer();
+        });
+    </script>
+</body>
+</html>
