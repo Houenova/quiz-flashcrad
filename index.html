@@ -8,93 +8,164 @@
             max-width: 600px;
             margin: 20px auto;
             padding: 10px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
         }
-        
+
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --input-bg: #ffffff;
+            --input-text: #000000;
+            --card-bg: #f9f9f9;
+            --border-color: #ccc;
+            --button-bg: #e0e0e0;
+            --button-text: #000;
+            --hover-bg: #d0d0d0;
+        }
+
+        .dark-mode {
+            --bg-color: #121212;
+            --text-color: #f0f0f0;
+            --input-bg: #1e1e1e;
+            --input-text: #f0f0f0;
+            --card-bg: #1e1e1e;
+            --border-color: #444;
+            --button-bg: #3a3a3a;
+            --button-text: #fff;
+            --hover-bg: #555;
+        }
+
+        .theme-toggle {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+
         .group-management {
             margin-bottom: 20px;
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
         }
-        
+
         .add-card {
             margin-bottom: 20px;
         }
-        
-        input[type="text"] {
+
+        input[type="text"], select {
             width: 200px;
             padding: 8px;
             margin-right: 10px;
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            border: 1px solid var(--border-color);
         }
-        
+
         button {
             padding: 8px 15px;
-            color: rgba(224, 28, 28, 0.788);
+            color: var(--button-text);
+            background-color: var(--button-bg);
             border: none;
+            border-radius: 4px;
             cursor: pointer;
         }
-        
+
+        button:hover {
+            background-color: var(--hover-bg);
+        }
+
         .flashcard {
-            background: #ffffff;
-            border: 1px solid #000000;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
             padding: 15px;
             margin: 10px 0;
             cursor: pointer;
             transition: 0.3s;
+            word-wrap: break-word;
+            white-space: normal;
+            border-radius: 5px;
         }
-        
+
+        .flashcard input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            border: 1px solid var(--border-color);
+        }
+
         .flashcard:hover {
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 10px rgba(255, 255, 255, 0.1);
         }
-        
+
         .hidden {
             display: none;
         }
-        
+
         #quiz-container {
             margin-top: 30px;
             padding: 20px;
-            background: #ffffff;
+            background: var(--card-bg);
             border-radius: 8px;
+            border: 1px solid var(--border-color);
         }
-        
+
         #quiz-answer {
             padding: 8px;
             width: 300px;
             margin: 10px 0;
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            border: 1px solid var(--border-color);
         }
-        
+
         .correct {
             color: #4CAF50;
             font-weight: bold;
         }
-        
+
         .wrong {
             color: #f44336;
             font-weight: bold;
         }
-        
+
         #group-select {
-            padding: 8px;
             flex-grow: 1;
             min-width: 200px;
         }
-        
+
         .quiz-button {
             background: #2196F3;
+            color: white;
+        }
+
+        .delete-group-btn {
+            background: #d32f2f;
+            color: white;
+        }
+
+        .delete-group-btn:hover {
+            background: #b71c1c;
         }
         
-        .delete-group-btn {
-            background: #e9e5e5;
-        }
     </style>
 </head>
 <body>
+    <!-- Toggle theme switch -->
+    <div class="theme-toggle">
+        <label>
+            <input type="checkbox" id="theme-switch" onchange="toggleTheme()"> Dark Mode
+        </label>
+    </div>
     <div class="group-management">
         <input type="text" id="new-group" placeholder="Tên nhóm mới">
         <button onclick="createGroup()">Tạo nhóm</button>
         <select id="group-select" onchange="changeGroup(this.value)"></select>
         <button class="delete-group-btn" onclick="deleteCurrentGroup()">Xóa nhóm</button>
+        <input type="text" id="rename-group" placeholder="Tên mới...">
+        <button onclick="renameGroup()">Đổi tên nhóm</button>
+
     </div>
 
     <h1>Flashcard của bạn</h1>
@@ -126,6 +197,41 @@
         let score = 0;
         let quizMode = false;
 
+        // Kiểm tra chế độ đã lưu
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('dark-mode');
+            document.getElementById('theme-switch').checked = true;
+        }
+
+        // Hàm chuyển đổi giao diện
+        function toggleTheme() {
+            const isDark = document.getElementById('theme-switch').checked;
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.body.classList.remove('dark-mode');
+                localStorage.setItem('theme', 'light');
+            }
+        }
+        // Kiểm tra chế độ đã lưu
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('dark-mode');
+            document.getElementById('theme-switch').checked = true;
+        }
+
+        // Hàm chuyển đổi giao diện
+        function toggleTheme() {
+            const isDark = document.getElementById('theme-switch').checked;
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.body.classList.remove('dark-mode');
+                localStorage.setItem('theme', 'light');
+            }
+        }
+
         // Khởi tạo nhóm
         function initGroups() {
             const select = document.getElementById('group-select');
@@ -136,6 +242,25 @@
             `).join('');
         }
 
+        function highlightDiff(wrong, correct) {
+            const wrongWords = wrong.trim().split(/\s+/);
+            const correctWords = correct.trim().split(/\s+/);
+            let result = [];
+        
+            const maxLength = Math.max(wrongWords.length, correctWords.length);
+            for (let i = 0; i < maxLength; i++) {
+                const wrongWord = wrongWords[i] || '';
+                const correctWord = correctWords[i] || '';
+                if (wrongWord === correctWord) {
+                    result.push(correctWord);
+                } else {
+                    result.push(`<span style="color: red; font-weight: bold">${correctWord}</span>`);
+                }
+            }
+        
+            return result.join(' ');
+        }
+        
         function createGroup() {
             const groupName = document.getElementById('new-group').value.trim();
             if (!groupName) return;
@@ -218,7 +343,7 @@
             }
 
             currentQuestionIndex++;
-            setTimeout(showNextQuestion, 1500);
+            setTimeout(showNextQuestion, 5000);
         }
 
         function endQuiz() {
@@ -256,6 +381,43 @@
                 container.appendChild(cardEl);
             });
         }
+        function renderCards() {
+            const container = document.getElementById('flashcards');
+            container.innerHTML = '';
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            if (!currentGroup) return;
+
+            currentGroup.cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'flashcard';
+
+                const questionInput = `<input type="text" value="${card.question}" onchange="editCard(${index}, 'question', this.value)">`;
+                const answerInput = `<input type="text" value="${card.answer}" onchange="editCard(${index}, 'answer', this.value)">`;
+
+                cardEl.innerHTML = `
+                    <div><strong>Q:</strong> ${questionInput}</div>
+                    <div class="${card.showAnswer ? '' : 'hidden'}"><strong>A:</strong> ${answerInput}</div>
+                    <button onclick="deleteCard(${index})">Xóa</button>
+                `;
+
+                cardEl.addEventListener('click', (e) => {
+                    if (e.target.tagName.toLowerCase() !== 'input' && e.target.tagName.toLowerCase() !== 'button') {
+                        currentGroup.cards[index].showAnswer = !currentGroup.cards[index].showAnswer;
+                        saveGroups();
+                        renderCards();
+                    }
+                });
+
+                container.appendChild(cardEl);
+            });
+        }
+
+        function editCard(index, field, value) {
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            if (field === 'question') currentGroup.cards[index].question = value;
+            else if (field === 'answer') currentGroup.cards[index].answer = value;
+            saveGroups();
+        }
 
         function addCard() {
             const question = document.getElementById('question').value;
@@ -285,6 +447,12 @@
         function saveGroups() {
             localStorage.setItem('groups', JSON.stringify(groups));
         }
+        // Thêm sự kiện Enter để thêm thẻ
+        document.getElementById('answer').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addCard();
+            }
+        });        
 
         // Khởi tạo ban đầu
         initGroups();
@@ -294,6 +462,37 @@
         document.getElementById('quiz-answer').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') checkAnswer();
         });
+
+        document.getElementById('question').addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                document.getElementById('answer').focus();
+            }
+        });
+
+        document.getElementById('answer').addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                document.getElementById('question').focus();
+            }
+        });
+
+        function renameGroup() {
+            const newName = document.getElementById('rename-group').value.trim();
+            if (!newName) {
+                alert("Vui lòng nhập tên mới cho nhóm.");
+                return;
+            }
+        
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            if (!currentGroup) return;
+        
+            currentGroup.name = newName;
+            saveGroups();
+            initGroups();
+            document.getElementById('rename-group').value = '';
+        }
+        
     </script>
 </body>
 </html>
