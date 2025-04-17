@@ -23,6 +23,8 @@
             --button-bg: #e0e0e0;
             --button-text: #000;
             --hover-bg: #d0d0d0;
+            --pause-bg: #ff9800; /* Màu nút Pause */
+            --pause-hover-bg: #e68a00;
         }
 
         .dark-mode {
@@ -35,6 +37,8 @@
             --button-bg: #3a3a3a;
             --button-text: #fff;
             --hover-bg: #555;
+            --pause-bg: #ff9800;
+            --pause-hover-bg: #e68a00;
         }
 
         .theme-toggle {
@@ -149,6 +153,25 @@
             background: #b71c1c;
         }
         
+        .resume-button { 
+            background: #4CAF50; 
+            color: white; 
+            margin-left: 10px; 
+        }
+
+        .resume-button:hover { 
+            background: #388E3C; 
+        }
+
+        .pause-button { 
+            background-color: var(--pause-bg); 
+            color: white; 
+            margin-left: 10px; 
+        }
+        .pause-button:hover { 
+            background-color: var(--pause-hover-bg); 
+        }
+
     </style>
 </head>
 <body>
@@ -176,12 +199,16 @@
         <button onclick="addCard()">Thêm thẻ</button>
     </div>
 
-    <button class="quiz-button" onclick="startQuiz()">Bắt đầu Quiz</button>
+    <!-- Nút Bắt đầu/Tiếp tục Quiz -->
+    <div id="quiz-controls">
+        <button class="quiz-button" id="start-quiz-btn" onclick="startQuiz()">Bắt đầu Quiz</button>
+    </div>
 
     <div id="quiz-container" class="hidden">
         <div id="quiz-question"></div>
         <input type="text" id="quiz-answer" placeholder="Nhập câu trả lời...">
-        <button onclick="checkAnswer()">Kiểm tra</button>
+        <button id="quiz-check-btn" onclick="checkAnswer()">Kiểm tra</button>
+        <button id="quiz-pause-btn" class="pause-button" onclick="pauseQuiz()">Tạm dừng</button>
         <div id="quiz-feedback"></div>
         <div id="quiz-score"></div>
     </div>
@@ -189,36 +216,133 @@
     <div id="flashcards"></div>
 
     <script>
-        let groups = JSON.parse(localStorage.getItem('groups')) || [
-            { id: 'default', name: 'Mặc định', cards: [] }
-        ];
+        // --- IndexedDB Helper Functions ---
+const DB_NAME = 'FlashcardAppDB';
+const DB_VERSION = 1; // Tăng version nếu thay đổi cấu trúc (thêm/xóa object store/index)
+const GROUP_STORE_NAME = 'groups';
+let db; // Biến lưu trữ đối tượng database
+
+// Mở (hoặc tạo) cơ sở dữ liệu
+function openDB() {
+    return new Promise((resolve, reject) => {
+        if (db) { // Nếu đã mở, trả về ngay
+            return resolve(db);
+        }
+        console.log(`Mở ${DB_NAME} version ${DB_VERSION}`);
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onerror = (event) => {
+            console.error("Lỗi khi mở IndexedDB:", event.target.error);
+            reject("Lỗi khi mở DB");
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            console.log("IndexedDB đã mở thành công.");
+            resolve(db);
+        };
+
+        // Chỉ chạy khi tạo DB lần đầu hoặc nâng cấp version
+        request.onupgradeneeded = (event) => {
+            console.log("Chạy onupgradeneeded...");
+            const tempDb = event.target.result;
+            if (!tempDb.objectStoreNames.contains(GROUP_STORE_NAME)) {
+                console.log(`Tạo object store: ${GROUP_STORE_NAME}`);
+                tempDb.createObjectStore(GROUP_STORE_NAME, { keyPath: 'id' });
+            }
+        };
+    });
+}
+
+async function getAllGroupsDB() {
+    const dbInstance = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readonly');
+        const store = transaction.objectStore(GROUP_STORE_NAME);
+        const request = store.getAll(); // Lấy tất cả object
+
+        request.onerror = (event) => {
+            console.error("Lỗi khi lấy tất cả nhóm:", event.target.error);
+            reject("Lỗi đọc dữ liệu nhóm");
+        };
+
+        request.onsuccess = (event) => {
+            resolve(event.target.result || []); // Trả về mảng kết quả hoặc mảng rỗng
+        };
+    });
+}
+
+async function saveGroupDB(group) {
+    const dbInstance = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(GROUP_STORE_NAME);
+        const request = store.put(group); // put sẽ thêm mới hoặc cập nhật nếu key đã tồn tại
+
+        request.onerror = (event) => {
+            console.error("Lỗi khi lưu nhóm:", event.target.error, 'Data:', group); // Thêm log data
+            reject("Lỗi lưu dữ liệu nhóm");
+        };
+
+        request.onsuccess = (event) => {
+            console.log('saveGroupDB thành công! Key:', event.target.result, 'Data:', group); // Thêm log data
+            resolve(event.target.result);
+        };
+    });
+}
+
+async function deleteGroupDB(groupId) {
+    const dbInstance = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(GROUP_STORE_NAME);
+        const request = store.delete(groupId);
+
+        request.onerror = (event) => {
+            console.error("Lỗi khi xóa nhóm:", event.target.error);
+            reject("Lỗi xóa dữ liệu nhóm");
+        };
+
+        request.onsuccess = (event) => {
+            console.log(`Đã xóa nhóm ID: ${groupId}`);
+            resolve();
+        };
+    });
+}
+
+// Lấy một nhóm cụ thể bằng ID (hữu ích cho việc cập nhật thẻ)
+async function getGroupByIdDB(groupId) {
+    const dbInstance = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readonly');
+        const store = transaction.objectStore(GROUP_STORE_NAME);
+        const request = store.get(groupId);
+        
+        request.onerror = (event) => {
+            console.error(`Lỗi khi lấy nhóm ID ${groupId}:`, event.target.error);
+            reject("Lỗi đọc dữ liệu nhóm");
+        };
+
+        request.onsuccess = (event) => {
+            resolve(event.target.result); // Trả về group object hoặc undefined nếu không tìm thấy
+        };
+    });
+}
+        
+        let groups = [];
         let currentGroupId = 'default';
-        let currentQuestionIndex = 0;
-        let score = 0;
         let quizMode = false;
+        let quizCheckButton = null; // Tham chiếu đến nút Kiểm tra/Tiếp theo/Thử lại
+        let quizPauseButton = null; // Tham chiếu đến nút Tạm dừng
+        let quizAnswerInput = null; // Tham chiếu đến ô nhập câu trả lời quiz
+        let quizFeedback = null;    // Tham chiếu đến phần phản hồi
+        let quizScoreDisplay = null; // Tham chiếu đến hiển thị điểm
+        let quizQuestionDisplay = null; // Tham chiếu đến hiển thị câu hỏi
 
-        // Kiểm tra chế độ đã lưu
-        if (localStorage.getItem('theme') === 'dark') {
-            document.body.classList.add('dark-mode');
-            document.getElementById('theme-switch').checked = true;
-        }
-
-        // Hàm chuyển đổi giao diện
-        function toggleTheme() {
-            const isDark = document.getElementById('theme-switch').checked;
-            if (isDark) {
-                document.body.classList.add('dark-mode');
-                localStorage.setItem('theme', 'dark');
-            } else {
-                document.body.classList.remove('dark-mode');
-                localStorage.setItem('theme', 'light');
-            }
-        }
-        // Kiểm tra chế độ đã lưu
-        if (localStorage.getItem('theme') === 'dark') {
-            document.body.classList.add('dark-mode');
-            document.getElementById('theme-switch').checked = true;
-        }
+        // --- Biến cho logic quiz mới ---
+        let quizSessionCards = []; // Mảng thẻ dùng trong phiên quiz hiện tại
+        let currentQuizIndex = 0;  // Chỉ số thẻ hiện tại trong quizSessionCards
+        let masteredCount = 0;     // Số thẻ đã thuộc (đúng 2 lần liên tiếp)
 
         // Hàm chuyển đổi giao diện
         function toggleTheme() {
@@ -232,7 +356,7 @@
             }
         }
 
-        // Khởi tạo nhóm
+        // Khởi tạo danh sách nhóm
         function initGroups() {
             const select = document.getElementById('group-select');
             select.innerHTML = groups.map(group => `
@@ -240,171 +364,509 @@
                     ${group.name} (${group.cards.length} thẻ)
                 </option>
             `).join('');
+            // Sau khi cập nhật select, kiểm tra lại quiz đang tạm dừng
+            checkPausedQuiz();
         }
 
+        // Hàm tô màu sự khác biệt (giữ nguyên)
         function highlightDiff(wrong, correct) {
-            const wrongWords = wrong.trim().split(/\s+/);
+            // ... (code hàm highlightDiff không đổi) ...
+             const wrongWords = wrong.trim().split(/\s+/);
             const correctWords = correct.trim().split(/\s+/);
             let result = [];
-        
+
             const maxLength = Math.max(wrongWords.length, correctWords.length);
             for (let i = 0; i < maxLength; i++) {
                 const wrongWord = wrongWords[i] || '';
                 const correctWord = correctWords[i] || '';
-                if (wrongWord === correctWord) {
+                if (wrongWord.toLowerCase() === correctWord.toLowerCase()) { // So sánh không phân biệt hoa thường
                     result.push(correctWord);
                 } else {
-                    result.push(`<span style="color: red; font-weight: bold">${correctWord}</span>`);
+                    // Hiển thị từ đúng màu đỏ, từ sai gạch ngang (tùy chọn)
+                     result.push(`<span style="color: red; font-weight: bold;">${correctWord || '[thiếu]'}</span>` + (wrongWord ? ` <s style="color: grey;">${wrongWord}</s>` : ''));
+                    // Hoặc chỉ hiển thị từ đúng:
+                    // result.push(`<span style="color: red; font-weight: bold">${correctWord || '[thiếu]'}</span>`);
                 }
             }
-        
             return result.join(' ');
         }
-        
-        function createGroup() {
+
+        // Tạo nhóm mới
+        async function createGroup() {
             const groupName = document.getElementById('new-group').value.trim();
             if (!groupName) return;
-            
-            const newGroup = {
-                id: Date.now().toString(),
-                name: groupName,
-                cards: []
-            };
-            
-            groups.push(newGroup);
-            localStorage.setItem('groups', JSON.stringify(groups));
-            initGroups();
-            document.getElementById('new-group').value = '';
+            const newGroupId = Date.now().toString(); // Tạo ID duy nhất
+            const newGroup = { id: newGroupId, name: groupName, cards: [] };
+        
+            try {
+                await saveGroupDB(newGroup); // Lưu vào DB
+                groups.push(newGroup); // Thêm vào mảng trong bộ nhớ
+                initGroups(); // Cập nhật UI
+                document.getElementById('new-group').value = '';
+                changeGroup(newGroup.id); // Chuyển sang nhóm mới (hàm này cần đảm bảo xử lý async nếu cần)
+            } catch (error) {
+                alert("Lỗi khi tạo nhóm mới.");
+                console.error("Lỗi createGroup:", error);
+            }
         }
 
+        // Thay đổi nhóm hiện tại
         function changeGroup(groupId) {
+            // Nếu đang trong quiz, không cho đổi nhóm (hoặc hỏi xác nhận hủy quiz)
+            if (quizMode) {
+                if (!confirm("Bạn đang trong quiz. Chuyển nhóm sẽ hủy tiến trình quiz hiện tại. Bạn có chắc chắn?")) {
+                    // Đặt lại select về giá trị cũ
+                    document.getElementById('group-select').value = currentGroupId;
+                    return;
+                }
+                // Nếu xác nhận, kết thúc quiz hiện tại mà không lưu
+                forceEndQuiz();
+            }
             currentGroupId = groupId;
+            document.getElementById('group-select').value = currentGroupId; // Đảm bảo select được cập nhật
             renderCards();
+            checkPausedQuiz(); // Kiểm tra lại nút Resume cho nhóm mới
         }
 
-        function deleteCurrentGroup() {
+        // Xóa nhóm hiện tại
+        async function deleteCurrentGroup() {
             if (currentGroupId === 'default') {
                 alert("Không thể xóa nhóm mặc định!");
                 return;
             }
-            
-            if (confirm("Xóa nhóm này và toàn bộ thẻ bên trong?")) {
-                groups = groups.filter(g => g.id !== currentGroupId);
-                currentGroupId = 'default';
-                saveGroups();
-                initGroups();
-                renderCards();
+            // Kiểm tra quiz đang tạm dừng (vẫn dùng localStorage)
+            const savedProgress = JSON.parse(localStorage.getItem('quizProgress') || 'null');
+            if (savedProgress && savedProgress.groupId === currentGroupId) {
+                if (!confirm("Nhóm này có tiến trình quiz đang tạm dừng. Xóa nhóm cũng sẽ xóa tiến trình này. Bạn có chắc chắn?")) {
+                    return;
+                }
+                localStorage.removeItem('quizProgress');
+                checkPausedQuiz();
+            }
+        
+            const groupToDelete = groups.find(g => g.id === currentGroupId);
+            if (!groupToDelete) return; // Không tìm thấy nhóm?
+        
+            if (confirm(`Xóa nhóm "${groupToDelete.name}" và toàn bộ thẻ bên trong?`)) {
+                try {
+                    await deleteGroupDB(currentGroupId); // Xóa khỏi DB
+                    groups = groups.filter(g => g.id !== currentGroupId); // Xóa khỏi mảng trong bộ nhớ
+                    currentGroupId = groups.find(g => g.id === 'default')?.id || groups[0]?.id || null; // Chuyển về mặc định hoặc nhóm đầu tiên
+        
+                    if (!currentGroupId && groups.length === 0) {
+                         // Nếu không còn nhóm nào, tạo lại nhóm mặc định
+                         console.log("Không còn nhóm nào, tạo lại nhóm mặc định.");
+                         const defaultGroup = { id: 'default', name: 'Mặc định', cards: [] };
+                         await saveGroupDB(defaultGroup);
+                         groups.push(defaultGroup);
+                         currentGroupId = 'default';
+                    } else if (!currentGroupId) {
+                        // Trường hợp lỗi không mong muốn
+                        console.error("Không thể xác định nhóm hiện tại sau khi xóa.");
+                        alert("Đã xảy ra lỗi sau khi xóa nhóm.");
+                        currentGroupId = 'default'; // Fallback an toàn
+                    }
+        
+        
+                    initGroups(); // Cập nhật select box
+                    renderCards(); // Render lại thẻ
+                } catch (error) {
+                    alert("Lỗi khi xóa nhóm.");
+                    console.error("Lỗi deleteCurrentGroup:", error);
+                }
             }
         }
 
-        function startQuiz() {
-            const currentGroup = groups.find(g => g.id === currentGroupId);
-            if (currentGroup.cards.length === 0) {
-                alert("Vui lòng thêm thẻ vào nhóm này trước!");
+        // Đổi tên nhóm
+        async function renameGroup() {
+            const newName = document.getElementById('rename-group').value.trim();
+            if (!newName) {
+                alert("Vui lòng nhập tên mới cho nhóm.");
                 return;
             }
-            
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            if (!currentGroup) return;
+        
+            const originalName = currentGroup.name; // Lưu tên cũ phòng lỗi
+            currentGroup.name = newName; // Cập nhật tên trong mảng bộ nhớ
+        
+            try {
+                await saveGroupDB(currentGroup); // Lưu thay đổi vào DB
+                initGroups(); // Cập nhật tên trong select
+                document.getElementById('rename-group').value = '';
+                // Cập nhật nút Resume nếu cần (logic này không đổi vì dùng localStorage)
+                checkPausedQuiz();
+            } catch (error) {
+                alert("Lỗi khi đổi tên nhóm.");
+                console.error("Lỗi renameGroup:", error);
+                currentGroup.name = originalName; // Hoàn tác thay đổi trong bộ nhớ nếu lưu DB lỗi
+                initGroups(); // Cập nhật lại UI về trạng thái cũ
+            }
+        }
+
+        // --- Logic Quiz Mới ---
+
+        function startQuiz(resume = false) {
+            if (!resume) {
+                 // Nếu bắt đầu quiz mới, xóa tiến trình cũ nếu có
+                 localStorage.removeItem('quizProgress');
+                 checkPausedQuiz(); // Ẩn nút Resume nếu có
+
+                const currentGroup = groups.find(g => g.id === currentGroupId);
+                if (!currentGroup || currentGroup.cards.length === 0) {
+                    alert("Vui lòng thêm thẻ vào nhóm này trước!");
+                    return;
+                }
+
+                // Tạo mảng thẻ cho phiên quiz
+                quizSessionCards = currentGroup.cards.map(card => ({
+                    ...card, // Sao chép thuộc tính gốc (question, answer)
+                    correctStreak: 0,
+                    isMastered: false
+                }));
+
+                // Reset trạng thái
+                currentQuizIndex = 0;
+                masteredCount = 0;
+
+            } else {
+                // Logic resume đã xử lý việc khôi phục state trong resumeQuiz()
+                 if (quizSessionCards.length === 0) {
+                     console.error("Lỗi: Không thể tiếp tục quiz, không có dữ liệu thẻ.");
+                     alert("Đã xảy ra lỗi khi tiếp tục quiz. Vui lòng bắt đầu lại.");
+                     forceEndQuiz();
+                     return;
+                 }
+            }
+
+
+            if (quizSessionCards.length === 0) {
+                 alert("Nhóm này không có thẻ nào để học!");
+                 return;
+            }
+
+            console.log('Bắt đầu quiz. Nhóm hiện tại:', currentGroupId);
+            console.log('Dữ liệu thẻ cho quiz (quizSessionCards):', JSON.stringify(quizSessionCards));
+
             quizMode = true;
-            currentQuestionIndex = 0;
-            score = 0;
             document.getElementById('quiz-container').classList.remove('hidden');
             document.getElementById('flashcards').classList.add('hidden');
             document.querySelector('.add-card').classList.add('hidden');
+            document.getElementById('quiz-controls').classList.add('hidden'); // Ẩn nút Start/Resume
+
+            updateScoreDisplay();
             showNextQuestion();
         }
 
         function showNextQuestion() {
-            const currentGroup = groups.find(g => g.id === currentGroupId);
-            if (currentQuestionIndex >= currentGroup.cards.length) {
+            // Kiểm tra xem tất cả đã master chưa
+            if (masteredCount >= quizSessionCards.length) {
                 endQuiz();
                 return;
             }
+
+            // Tìm thẻ chưa master tiếp theo
+            let attempts = 0; // Ngăn vòng lặp vô hạn nếu có lỗi logic
+            let foundIndex = -1;
+
+            // Bắt đầu tìm từ vị trí sau vị trí hiện tại
+            let searchIndex = (currentQuizIndex + 1) % quizSessionCards.length;
+
+            while (attempts < quizSessionCards.length) {
+                 if (!quizSessionCards[searchIndex].isMastered) {
+                     foundIndex = searchIndex;
+                     break;
+                 }
+                 searchIndex = (searchIndex + 1) % quizSessionCards.length;
+                 attempts++;
+            }
+
+             // Nếu không tìm thấy (trường hợp này không nên xảy ra nếu masteredCount < length)
+             if (foundIndex === -1) {
+                 // Có thể tất cả đã master, kiểm tra lại
+                 if (quizSessionCards.every(card => card.isMastered)) {
+                     endQuiz();
+                     return;
+                 } else {
+                     // Lỗi logic không mong muốn, thử tìm từ đầu
+                     console.warn("Không tìm thấy thẻ chưa master tiếp theo, thử tìm lại từ đầu.");
+                     foundIndex = quizSessionCards.findIndex(card => !card.isMastered);
+                     if (foundIndex === -1) {
+                         console.error("Lỗi nghiêm trọng: Không tìm thấy thẻ chưa master nào dù masteredCount chưa đủ.");
+                         alert("Đã xảy ra lỗi trong quá trình quiz. Quiz sẽ kết thúc.");
+                         forceEndQuiz();
+                         return;
+                     }
+                 }
+             }
+
+
+            currentQuizIndex = foundIndex;
+            const currentCard = quizSessionCards[currentQuizIndex];
+
+            console.log('Hiển thị câu hỏi tiếp theo. Index:', currentQuizIndex);
+            console.log('Thẻ hiện tại (currentCard):', JSON.stringify(currentCard));
             
-            const quizQuestion = document.getElementById('quiz-question');
-            quizQuestion.textContent = currentGroup.cards[currentQuestionIndex].question;
-            document.getElementById('quiz-answer').value = '';
-            document.getElementById('quiz-feedback').innerHTML = '';
+
+            quizQuestionDisplay.textContent = currentCard.question;
+            quizAnswerInput.value = '';
+            quizFeedback.innerHTML = ''; // Xóa phản hồi cũ
+            quizCheckButton.textContent = 'Kiểm tra';
+            quizCheckButton.onclick = checkAnswer; // Gán lại hàm checkAnswer
+            quizAnswerInput.disabled = false; // Đảm bảo ô nhập được kích hoạt
+            quizAnswerInput.focus();
+            quizPauseButton.disabled = false; // Kích hoạt nút Pause
         }
 
         function checkAnswer() {
-            const currentGroup = groups.find(g => g.id === currentGroupId);
-            const userAnswer = document.getElementById('quiz-answer').value.trim().toLowerCase();
-            const correctAnswer = currentGroup.cards[currentQuestionIndex].answer.trim().toLowerCase();
-            const feedback = document.getElementById('quiz-feedback');
-
-            if (userAnswer === correctAnswer) {
-                feedback.innerHTML = '<span class="correct">Correct! 🎉</span>';
-                score++;
-            } else {
-                feedback.innerHTML = `
-                    <span class="wrong">Sai rồi 😢</span>
-                    <div>Đáp án đúng: ${currentGroup.cards[currentQuestionIndex].answer}</div>
-                `;
+            if (currentQuizIndex < 0 || currentQuizIndex >= quizSessionCards.length) {
+                console.error("Lỗi: currentQuizIndex không hợp lệ:", currentQuizIndex);
+                alert("Đã xảy ra lỗi, vui lòng thử lại.");
+                forceEndQuiz();
+                return;
             }
 
-            currentQuestionIndex++;
-            setTimeout(showNextQuestion, 5000);
+            const currentCard = quizSessionCards[currentQuizIndex];
+            const userAnswer = quizAnswerInput.value.trim().toLowerCase();
+            const correctAnswer = currentCard.answer.trim().toLowerCase();
+            const originalCorrectAnswer = currentCard.answer;
+
+            quizAnswerInput.disabled = true; // Vô hiệu hóa ô nhập tạm thời
+            quizPauseButton.disabled = true; // Vô hiệu hóa Pause khi đang xử lý
+
+            if (userAnswer === correctAnswer) {
+                currentCard.correctStreak++;
+                if (currentCard.correctStreak >= 2) {
+                    if (!currentCard.isMastered) { // Chỉ tăng masteredCount nếu thẻ chưa được master trước đó
+                        currentCard.isMastered = true;
+                        masteredCount++;
+                        updateScoreDisplay();
+                    }
+                    quizFeedback.innerHTML = `<span class="correct">Đúng rồi! Đã thuộc câu này! 🎉 (${currentCard.correctStreak}/2)</span><br>Nhấn Enter hoặc nút 'Tiếp theo' để qua câu sau.`;
+                } else {
+                    quizFeedback.innerHTML = `<span class="correct">Đúng rồi! 👍 (Lần ${currentCard.correctStreak}/2)</span><br>Nhấn Enter hoặc nút 'Tiếp theo' để qua câu sau.`;
+                }
+
+                // Cho phép chuyển câu tiếp theo
+                quizCheckButton.textContent = 'Tiếp theo';
+                quizCheckButton.onclick = showNextQuestion;
+                quizCheckButton.focus(); // Focus vào nút "Tiếp theo"
+                quizPauseButton.disabled = false; // Kích hoạt lại Pause
+
+            } else {
+                // Trả lời sai, reset streak và yêu cầu thử lại
+                currentCard.correctStreak = 0;
+                quizFeedback.innerHTML = `
+                    <span class="wrong">Sai rồi 😢</span>
+                    <div>Đáp án đúng: ${originalCorrectAnswer}</div>
+                    <div>So sánh: ${highlightDiff(userAnswer, originalCorrectAnswer)}</div>
+                    <br><strong>Hãy thử lại câu này!</strong>
+                `;
+
+                // Giữ nguyên câu hỏi, cho phép nhập lại
+                quizCheckButton.textContent = 'Thử lại'; // Đổi nút thành "Thử lại"
+                quizCheckButton.onclick = checkAnswer; // Vẫn gọi checkAnswer khi nhấn nút
+                quizAnswerInput.disabled = false; // Kích hoạt lại ô nhập
+                quizAnswerInput.focus(); // Focus lại ô nhập
+                quizAnswerInput.select(); // Chọn toàn bộ text để dễ sửa
+                quizPauseButton.disabled = false; // Kích hoạt lại Pause
+            }
+        }
+
+        function updateScoreDisplay() {
+            quizScoreDisplay.textContent = `Đã thuộc: ${masteredCount}/${quizSessionCards.length}`;
         }
 
         function endQuiz() {
-            const currentGroup = groups.find(g => g.id === currentGroupId);
+            alert(`Chúc mừng! Bạn đã thuộc tất cả ${quizSessionCards.length} thẻ trong nhóm này!`);
+            localStorage.removeItem('quizProgress'); // Xóa tiến trình đã lưu khi hoàn thành
+            forceEndQuiz(); // Gọi hàm dọn dẹp chung
+        }
+
+        // Hàm kết thúc quiz (do hoàn thành, tạm dừng, hoặc hủy)
+        function forceEndQuiz() {
+            quizMode = false;
             document.getElementById('quiz-container').classList.add('hidden');
             document.getElementById('flashcards').classList.remove('hidden');
             document.querySelector('.add-card').classList.remove('hidden');
-            
-            alert(`Kết thúc! Điểm của bạn: ${score}/${currentGroup.cards.length}`);
-            quizMode = false;
+            document.getElementById('quiz-controls').classList.remove('hidden'); // Hiện lại nút Start/Resume
+
+            // Reset trạng thái quiz
+            quizSessionCards = [];
+            currentQuizIndex = 0;
+            masteredCount = 0;
+            quizScoreDisplay.textContent = '';
+            quizFeedback.innerHTML = '';
+            quizAnswerInput.value = '';
+            quizAnswerInput.disabled = false;
+
+            // Đặt lại nút kiểm tra về trạng thái ban đầu
+            if (quizCheckButton) {
+                quizCheckButton.textContent = 'Kiểm tra';
+                quizCheckButton.onclick = checkAnswer;
+            }
+             checkPausedQuiz(); // Kiểm tra lại xem có nút Resume không (sau khi xóa progress)
         }
 
+
+        // --- Chức năng Tạm dừng / Tiếp tục ---
+        function pauseQuiz() {
+            if (!quizMode) return;
+            const cardIdsInSession = quizSessionCards.map(card => card.id || card.question); // Dùng ID nếu có, hoặc question làm key tạm
+
+            const quizState = {
+                groupId: currentGroupId,
+                cardIds: cardIdsInSession,
+                cardStates: quizSessionCards.map(card => ({ // Lưu trạng thái riêng của từng thẻ
+                    id: card.id || card.question, // Key để khớp
+                    correctStreak: card.correctStreak,
+                    isMastered: card.isMastered
+                })),
+                currentIndex: currentQuizIndex, // Vẫn lưu index hiện tại
+                mastered: masteredCount,
+                timestamp: Date.now()
+            };
+        
+
+            try {
+                localStorage.setItem('quizProgress', JSON.stringify(quizState));
+                alert("Quiz đã được tạm dừng. Bạn có thể tiếp tục sau.");
+                forceEndQuiz();
+            } catch (e) {
+                // Kiểm tra lỗi cụ thể hơn nếu có thể
+                if (e.name === 'QuotaExceededError') {
+                     alert("Không thể lưu tiến trình quiz do hết dung lượng lưu trữ trình duyệt (localStorage). Hãy thử xóa bớt dữ liệu duyệt web hoặc giảm số lượng thẻ trong nhóm.");
+                } else {
+                     alert("Không thể lưu tiến trình quiz. Đã xảy ra lỗi không mong muốn.");
+                }
+                console.error("Lỗi khi lưu tiến trình quiz:", e);
+            }
+        }
+
+        function resumeQuiz() {
+            const savedProgress = JSON.parse(localStorage.getItem('quizProgress') || 'null');
+            if (!savedProgress || !savedProgress.cardIds) { // Kiểm tra có cardIds không
+                alert("Không tìm thấy tiến trình quiz đã lưu hoặc dữ liệu không hợp lệ.");
+                localStorage.removeItem('quizProgress'); // Xóa dữ liệu không hợp lệ
+                checkPausedQuiz();
+                return;
+            }
+
+            const targetGroup = groups.find(g => g.id === savedProgress.groupId);
+            if (!targetGroup) {
+                alert(`Nhóm của quiz đã lưu (ID: ${savedProgress.groupId}) không còn tồn tại. Không thể tiếp tục.`);
+                localStorage.removeItem('quizProgress');
+                checkPausedQuiz();
+                return;
+            }
+        
+            // Khôi phục trạng thái
+            currentGroupId = savedProgress.groupId;
+            masteredCount = savedProgress.mastered;
+            currentQuizIndex = savedProgress.currentIndex; // Sẽ được điều chỉnh lại trong showNextQuestion
+        
+            // Tái tạo quizSessionCards từ dữ liệu gốc và trạng thái đã lưu
+            quizSessionCards = savedProgress.cardIds.map(cardIdOrQuestion => {
+                const originalCard = targetGroup.cards.find(c => (c.id || c.question) === cardIdOrQuestion);
+                const savedState = savedProgress.cardStates.find(s => s.id === cardIdOrQuestion);
+        
+                if (!originalCard) {
+                    console.warn(`Không tìm thấy thẻ gốc với ID/Question: ${cardIdOrQuestion}`);
+                    return null; // Bỏ qua thẻ không tìm thấy
+                }
+        
+                return {
+                    ...originalCard, // Lấy question, answer từ thẻ gốc
+                    correctStreak: savedState ? savedState.correctStreak : 0,
+                    isMastered: savedState ? savedState.isMastered : false
+                };
+            }).filter(card => card !== null); // Loại bỏ các thẻ không tìm thấy
+        
+            if (quizSessionCards.length === 0) {
+                 alert("Không thể khôi phục thẻ cho quiz. Có thể thẻ đã bị xóa.");
+                 localStorage.removeItem('quizProgress');
+                 checkPausedQuiz();
+                 return;
+            }
+        
+        
+            document.getElementById('group-select').value = currentGroupId;
+            renderCards();
+        
+            startQuiz(true); // Gọi startQuiz với cờ resume = true
+        }
+
+        // Kiểm tra và hiển thị nút Resume nếu có
+        function checkPausedQuiz() {
+            const savedProgress = JSON.parse(localStorage.getItem('quizProgress') || 'null');
+            const resumeButtonContainer = document.getElementById('quiz-controls');
+            let resumeButton = document.getElementById('resume-quiz-btn');
+
+            // Xóa nút Resume cũ nếu có
+            if (resumeButton) {
+                resumeButton.remove();
+            }
+
+            if (savedProgress && savedProgress.groupId === currentGroupId) {
+                // Tìm tên nhóm đã lưu
+                const groupName = groups.find(g => g.id === savedProgress.groupId)?.name || 'Nhóm đã lưu';
+                const savedTime = new Date(savedProgress.timestamp).toLocaleString();
+
+                // Tạo nút Resume mới
+                resumeButton = document.createElement('button');
+                resumeButton.id = 'resume-quiz-btn';
+                resumeButton.className = 'resume-button';
+                resumeButton.textContent = `Tiếp tục Quiz (${groupName} - ${savedProgress.mastered}/${savedProgress.sessionCards.length} thuộc)`;
+                resumeButton.title = `Lưu lúc: ${savedTime}`;
+                resumeButton.onclick = resumeQuiz;
+
+                // Thêm nút vào container (ví dụ: bên cạnh nút Start)
+                resumeButtonContainer.appendChild(resumeButton);
+                 document.getElementById('start-quiz-btn').textContent = "Bắt đầu Quiz Mới"; // Đổi text nút start
+            } else {
+                 // Nếu không có progress hoặc không khớp nhóm, đảm bảo nút Start là mặc định
+                 document.getElementById('start-quiz-btn').textContent = "Bắt đầu Quiz";
+            }
+        }
+
+
+        // --- Các hàm quản lý thẻ (render, add, edit, delete) ---
         function renderCards() {
             const container = document.getElementById('flashcards');
             container.innerHTML = '';
-            
             const currentGroup = groups.find(g => g.id === currentGroupId);
-            if (!currentGroup) return;
+            if (!currentGroup) {
+                 container.innerHTML = "<p>Vui lòng chọn hoặc tạo một nhóm.</p>";
+                 return;
+            }
+             if (currentGroup.cards.length === 0) {
+                 container.innerHTML = "<p>Nhóm này chưa có thẻ nào. Hãy thêm thẻ!</p>";
+             }
 
             currentGroup.cards.forEach((card, index) => {
                 const cardEl = document.createElement('div');
                 cardEl.className = 'flashcard';
-                cardEl.innerHTML = `
-                    <div>${card.question}</div>
-                    <div class="${card.showAnswer ? '' : 'hidden'}">${card.answer}</div>
-                    <button onclick="deleteCard(${index})">Xóa</button>
-                `;
-
-                cardEl.addEventListener('click', () => {
-                    currentGroup.cards[index].showAnswer = !currentGroup.cards[index].showAnswer;
-                    saveGroups();
-                    renderCards();
-                });
-
-                container.appendChild(cardEl);
-            });
-        }
-        function renderCards() {
-            const container = document.getElementById('flashcards');
-            container.innerHTML = '';
-            const currentGroup = groups.find(g => g.id === currentGroupId);
-            if (!currentGroup) return;
-
-            currentGroup.cards.forEach((card, index) => {
-                const cardEl = document.createElement('div');
-                cardEl.className = 'flashcard';
-
-                const questionInput = `<input type="text" value="${card.question}" onchange="editCard(${index}, 'question', this.value)">`;
-                const answerInput = `<input type="text" value="${card.answer}" onchange="editCard(${index}, 'answer', this.value)">`;
+                // Cho phép chỉnh sửa trực tiếp trên thẻ
+                const questionInput = `<input type="text" value="${escapeHtml(card.question)}" onchange="editCard(${index}, 'question', this.value)" onclick="event.stopPropagation()">`;
+                const answerInput = `<input type="text" value="${escapeHtml(card.answer)}" onchange="editCard(${index}, 'answer', this.value)" onclick="event.stopPropagation()">`;
 
                 cardEl.innerHTML = `
                     <div><strong>Q:</strong> ${questionInput}</div>
-                    <div class="${card.showAnswer ? '' : 'hidden'}"><strong>A:</strong> ${answerInput}</div>
-                    <button onclick="deleteCard(${index})">Xóa</button>
+                    <div class="answer-display ${card.showAnswer ? '' : 'hidden'}"><strong>A:</strong> ${answerInput}</div>
+                    <button onclick="deleteCard(${index}); event.stopPropagation();">Xóa</button>
                 `;
 
+                // Click vào thẻ (không phải input/button) để hiện/ẩn câu trả lời
                 cardEl.addEventListener('click', (e) => {
-                    if (e.target.tagName.toLowerCase() !== 'input' && e.target.tagName.toLowerCase() !== 'button') {
-                        currentGroup.cards[index].showAnswer = !currentGroup.cards[index].showAnswer;
-                        saveGroups();
-                        renderCards();
+                    // Chỉ toggle khi click vào vùng trống của thẻ
+                    if (e.target === cardEl || e.target.tagName === 'DIV' || e.target.tagName === 'STRONG') {
+                         const answerDiv = cardEl.querySelector('.answer-display');
+                         if (answerDiv) {
+                             answerDiv.classList.toggle('hidden');
+                             // Lưu trạng thái showAnswer (tùy chọn, có thể không cần thiết nếu chỉ là tạm thời)
+                             // currentGroup.cards[index].showAnswer = !answerDiv.classList.contains('hidden');
+                             // saveGroups();
+                         }
                     }
                 });
 
@@ -412,87 +874,253 @@
             });
         }
 
-        function editCard(index, field, value) {
+        // Hàm chống XSS cơ bản khi hiển thị value trong input
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') return unsafe;
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
+
+        async function editCard(index, field, value) {
             const currentGroup = groups.find(g => g.id === currentGroupId);
-            if (field === 'question') currentGroup.cards[index].question = value;
-            else if (field === 'answer') currentGroup.cards[index].answer = value;
-            saveGroups();
-        }
-
-        function addCard() {
-            const question = document.getElementById('question').value;
-            const answer = document.getElementById('answer').value;
-            
-            if (question && answer) {
-                const currentGroup = groups.find(g => g.id === currentGroupId);
-                currentGroup.cards.push({
-                    question,
-                    answer,
-                    showAnswer: false
-                });
-                saveGroups();
-                renderCards();
-                document.getElementById('question').value = '';
-                document.getElementById('answer').value = '';
-            }
-        }
-
-        function deleteCard(index) {
-            const currentGroup = groups.find(g => g.id === currentGroupId);
-            currentGroup.cards.splice(index, 1);
-            saveGroups();
-            renderCards();
-        }
-
-        function saveGroups() {
-            localStorage.setItem('groups', JSON.stringify(groups));
-        }
-        // Thêm sự kiện Enter để thêm thẻ
-        document.getElementById('answer').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                addCard();
-            }
-        });        
-
-        // Khởi tạo ban đầu
-        initGroups();
-        renderCards();
-
-        // Xử lý phím Enter trong quiz
-        document.getElementById('quiz-answer').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') checkAnswer();
-        });
-
-        document.getElementById('question').addEventListener('keydown', function(e) {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                document.getElementById('answer').focus();
-            }
-        });
-
-        document.getElementById('answer').addEventListener('keydown', function(e) {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                document.getElementById('question').focus();
-            }
-        });
-
-        function renameGroup() {
-            const newName = document.getElementById('rename-group').value.trim();
-            if (!newName) {
-                alert("Vui lòng nhập tên mới cho nhóm.");
+            if (!currentGroup || !currentGroup.cards[index]) return;
+        
+            const trimmedValue = value.trim();
+            const cardToEdit = currentGroup.cards[index];
+            const originalValue = cardToEdit[field]; // Lưu giá trị cũ
+        
+            if (!trimmedValue) {
+                alert("Câu hỏi và câu trả lời không được để trống!");
+                renderCards(); // Render lại để reset input về giá trị cũ (originalValue)
                 return;
             }
         
-            const currentGroup = groups.find(g => g.id === currentGroupId);
-            if (!currentGroup) return;
+            // Cập nhật giá trị trong mảng bộ nhớ
+            cardToEdit[field] = trimmedValue;
         
-            currentGroup.name = newName;
-            saveGroups();
-            initGroups();
-            document.getElementById('rename-group').value = '';
+            try {
+                await saveGroupDB(currentGroup); // Lưu toàn bộ group đã cập nhật vào DB
+                // Không cần render lại ngay nếu thành công, vì input đã cập nhật
+            } catch (error) {
+                alert("Lỗi khi cập nhật thẻ.");
+                console.error("Lỗi editCard:", error);
+                // Hoàn tác thay đổi trong bộ nhớ nếu lưu DB lỗi
+                cardToEdit[field] = originalValue;
+                renderCards(); // Render lại để hiển thị giá trị cũ
+            }
         }
         
+
+        async function addCard() {
+            const questionInput = document.getElementById('question');
+            const answerInput = document.getElementById('answer');
+            const question = questionInput.value.trim();
+            const answer = answerInput.value.trim();
+        
+            if (question && answer) {
+                const currentGroup = groups.find(g => g.id === currentGroupId);
+                if (!currentGroup) {
+                    alert("Lỗi: Không tìm thấy nhóm hiện tại để thêm thẻ.");
+                    return;
+                }
+        
+                const newCard = {
+                    // Có thể thêm ID duy nhất cho thẻ nếu cần xóa/sửa chính xác hơn sau này
+                    // id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    question,
+                    answer,
+                    showAnswer: false
+                };
+        
+                currentGroup.cards.push(newCard); // Thêm vào mảng trong bộ nhớ
+        
+                try {
+                    await saveGroupDB(currentGroup); // Lưu toàn bộ group đã cập nhật vào DB
+                    renderCards(); // Cập nhật danh sách thẻ UI
+                    initGroups(); // Cập nhật số lượng thẻ trong select
+                    questionInput.value = '';
+                    answerInput.value = '';
+                    questionInput.focus();
+                } catch (error) {
+                    alert("Lỗi khi thêm thẻ mới.");
+                    console.error("Lỗi addCard:", error);
+                    // Hoàn tác: Xóa thẻ vừa thêm khỏi mảng nếu lưu DB lỗi
+                    currentGroup.cards.pop();
+                    renderCards();
+                    initGroups();
+                }
+            } else {
+                alert("Vui lòng nhập cả câu hỏi và câu trả lời.");
+            }
+        }
+
+        async function deleteCard(index) {
+            const currentGroup = groups.find(g => g.id === currentGroupId);
+            if (!currentGroup || !currentGroup.cards[index]) return;
+        
+            const cardToDelete = currentGroup.cards[index];
+        
+            if (confirm(`Bạn có chắc muốn xóa thẻ:\nQ: ${cardToDelete.question}\nA: ${cardToDelete.answer}`)) {
+                const removedCard = currentGroup.cards.splice(index, 1)[0]; // Xóa khỏi mảng và lưu lại phòng lỗi
+        
+                try {
+                    await saveGroupDB(currentGroup); // Lưu group đã cập nhật vào DB
+                    renderCards(); // Cập nhật UI
+                    initGroups(); // Cập nhật số lượng thẻ
+                } catch (error) {
+                    alert("Lỗi khi xóa thẻ.");
+                    console.error("Lỗi deleteCard:", error);
+                    // Hoàn tác: Thêm thẻ lại vào mảng nếu lưu DB lỗi
+                    currentGroup.cards.splice(index, 0, removedCard);
+                    renderCards();
+                    initGroups();
+                }
+            }
+        }
+
+        async function initializeApp() {
+            if (localStorage.getItem('theme') === 'dark') {
+                document.body.classList.add('dark-mode');
+                document.getElementById('theme-switch').checked = true;
+            } else {
+                document.body.classList.remove('dark-mode');
+            }
+
+            quizCheckButton = document.getElementById('quiz-check-btn');
+            quizPauseButton = document.getElementById('quiz-pause-btn');
+            quizAnswerInput = document.getElementById('quiz-answer'); // Gán giá trị ở đây
+            quizFeedback = document.getElementById('quiz-feedback');
+            quizScoreDisplay = document.getElementById('quiz-score');
+            quizQuestionDisplay = document.getElementById('quiz-question');
+            const questionInput = document.getElementById('question'); // Lấy tham chiếu luôn ở đây
+            const answerInput = document.getElementById('answer');     // Lấy tham chiếu luôn ở đây
+
+            try {
+                await openDB();
+        
+                // --- BƯỚC CHUYỂN ĐỔI (Migration) - Chỉ chạy một lần ---
+                const migrationDone = localStorage.getItem('indexedDB_migration_complete');
+                if (!migrationDone) {
+                    console.log("Kiểm tra dữ liệu localStorage cũ để chuyển đổi...");
+                    const oldLocalStorageData = localStorage.getItem('groups');
+                    if (oldLocalStorageData) {
+                        try {
+                            const oldGroups = JSON.parse(oldLocalStorageData);
+                            if (Array.isArray(oldGroups) && oldGroups.length > 0) {
+                                console.log(`Tìm thấy ${oldGroups.length} nhóm cũ trong localStorage. Bắt đầu chuyển đổi...`);
+                                // Kiểm tra xem DB có trống không trước khi ghi đè
+                                const currentDBGroups = await getAllGroupsDB();
+                                if (currentDBGroups.length === 0) {
+                                     // Chỉ chuyển đổi nếu DB trống để tránh ghi đè dữ liệu mới hơn
+                                    for (const group of oldGroups) {
+                                        // Đảm bảo group có ID hợp lệ (localStorage cũ có thể không có)
+                                        if (!group.id) {
+                                            group.id = Date.now().toString() + Math.random().toString(36).substring(2, 9); // Tạo ID nếu thiếu
+                                            console.warn(`Nhóm "${group.name}" thiếu ID, đã tạo ID mới: ${group.id}`);
+                                        }
+                                        // Đảm bảo cards là mảng
+                                        if (!Array.isArray(group.cards)) {
+                                            group.cards = [];
+                                        }
+                                        await saveGroupDB(group);
+                                    }
+                                    console.log("Chuyển đổi dữ liệu từ localStorage sang IndexedDB thành công!");
+                                    // Đánh dấu đã hoàn thành chuyển đổi
+                                    localStorage.setItem('indexedDB_migration_complete', 'true');
+                                    // Không xóa localStorage ngay, để phòng trường hợp cần kiểm tra lại
+                                    // localStorage.removeItem('groups');
+                                } else {
+                                     console.log("IndexedDB đã có dữ liệu, bỏ qua chuyển đổi từ localStorage.");
+                                     localStorage.setItem('indexedDB_migration_complete', 'true'); // Đánh dấu đã kiểm tra
+                                }
+                            } else {
+                                 console.log("Không có dữ liệu hợp lệ trong localStorage cũ hoặc mảng rỗng.");
+                                 localStorage.setItem('indexedDB_migration_complete', 'true'); // Đánh dấu đã kiểm tra
+                            }
+                        } catch (parseError) {
+                            console.error("Lỗi khi đọc hoặc chuyển đổi dữ liệu localStorage cũ:", parseError);
+                             // Vẫn đánh dấu để không thử lại liên tục nếu dữ liệu lỗi
+                             localStorage.setItem('indexedDB_migration_complete', 'true');
+                        }
+                    } else {
+                         console.log("Không tìm thấy dữ liệu 'groups' trong localStorage cũ.");
+                         localStorage.setItem('indexedDB_migration_complete', 'true'); // Đánh dấu đã kiểm tra
+                    }
+                }
+                // --- KẾT THÚC BƯỚC CHUYỂN ĐỔI ---
+        
+        
+                // Load dữ liệu nhóm từ IndexedDB (bây giờ có thể chứa dữ liệu đã chuyển đổi)
+                groups = await getAllGroupsDB();
+                console.log('>>> Dữ liệu nhóm được gán vào biến groups:', JSON.stringify(groups)); // Log quan trọng!
+
+                if (groups.length === 0) {
+                    console.log("Không có nhóm nào trong DB, tạo nhóm mặc định.");
+                    const defaultGroup = { id: 'default', name: 'Mặc định', cards: [] };
+                    await saveGroupDB(defaultGroup); // Lưu nhóm mặc định vào DB
+                    groups.push(defaultGroup); // Thêm vào mảng hiện tại
+                }
+
+                initGroups();
+                renderCards();
+                checkPausedQuiz()
+
+                // --- Event Listeners ---
+        // Thêm thẻ khi nhấn Enter ở ô câu trả lời (phần thêm thẻ)
+        document.getElementById('answer').addEventListener('keypress', function(e) {
+        });
+
+        // --- Chạy khởi tạo khi trang tải xong ---
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        answerInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addCard();
+            }
+        });
+
+        // Xử lý Enter trong ô trả lời quiz
+        quizAnswerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Ngăn submit form (nếu có)
+                // Kích hoạt hành động hiện tại của nút Kiểm tra/Tiếp theo/Thử lại
+                if (quizCheckButton && !quizAnswerInput.disabled) { // Chỉ kích hoạt nếu input đang bật
+                    quizCheckButton.click();
+                }
+            }
+        });
+
+        // Tab navigation
+        questionInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab' && !e.shiftKey) {
+                e.preventDefault();
+                answerInput.focus();
+            }
+        });
+        // Listener thứ hai cho 'answer' (xem lại có cần không)
+        answerInput.addEventListener('keydown', function(e) {
+             if (e.key === 'Tab') {
+                 e.preventDefault();
+                 if (e.shiftKey) {
+                      questionInput.focus();
+                 } else {
+                     document.querySelector('.add-card button').focus();
+                 }
+             }
+         });
+        // --- KẾT THÚC DI CHUYỂN EVENT LISTENERS ---
+    } catch (error) {
+        console.error("Lỗi khởi tạo ứng dụng với IndexedDB:", error);
+        alert("Không thể tải dữ liệu nhóm. Vui lòng thử tải lại trang.");
+        // Có thể hiển thị thông báo lỗi trên UI
+    }
+}  
+document.addEventListener('DOMContentLoaded', initializeApp); // Listener này giữ nguyên
     </script>
 </body>
 </html>
