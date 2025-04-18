@@ -3,173 +3,478 @@
 <head>
     <title>Flashcard Cá Nhân</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 10px;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            transition: background-color 0.3s, color 0.3s;
-        }
-
+        /* --- Base Styles & Variables --- */
         :root {
-            --bg-color: #ffffff;
-            --text-color: #000000;
+            --bg-color: #f8f9fa; /* Nền sáng hơn một chút */
+            --text-color: #212529; /* Text tối hơn một chút */
+            --card-bg: #ffffff;
+            --border-color: #dee2e6; /* Border nhạt hơn */
             --input-bg: #ffffff;
-            --input-text: #000000;
-            --card-bg: #f9f9f9;
-            --border-color: #ccc;
-            --button-bg: #e0e0e0;
-            --button-text: #000;
-            --hover-bg: #d0d0d0;
-            --pause-bg: #ff9800; /* Màu nút Pause */
-            --pause-hover-bg: #e68a00;
+            --input-text: #495057;
+            --input-border: #ced4da;
+            --input-focus-border: #86b7fe;
+            --input-focus-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+
+            --primary-btn-bg: #0d6efd;
+            --primary-btn-hover-bg: #0b5ed7;
+            --primary-btn-text: #ffffff;
+
+            --secondary-btn-bg: #6c757d;
+            --secondary-btn-hover-bg: #5c636a;
+            --secondary-btn-text: #ffffff;
+
+            --danger-btn-bg: #dc3545;
+            --danger-btn-hover-bg: #bb2d3b;
+            --danger-btn-text: #ffffff;
+
+            --warning-btn-bg: #ffc107;
+            --warning-btn-hover-bg: #ffca2c;
+            --warning-btn-text: #000;
+
+            --success-btn-bg: #198754;
+            --success-btn-hover-bg: #157347;
+            --success-btn-text: #ffffff;
+
+            --shadow-sm: 0 .125rem .25rem rgba(0, 0, 0, .075);
+            --shadow-md: 0 .5rem 1rem rgba(0, 0, 0, .15);
         }
 
         .dark-mode {
-            --bg-color: #121212;
-            --text-color: #f0f0f0;
-            --input-bg: #1e1e1e;
-            --input-text: #f0f0f0;
-            --card-bg: #1e1e1e;
-            --border-color: #444;
-            --button-bg: #3a3a3a;
-            --button-text: #fff;
-            --hover-bg: #555;
-            --pause-bg: #ff9800;
-            --pause-hover-bg: #e68a00;
+            --bg-color: #212529;
+            --text-color: #dee2e6;
+            --card-bg: #343a40;
+            --border-color: #495057;
+            --input-bg: #343a40;
+            --input-text: #dee2e6;
+            --input-border: #6c757d;
+            --input-focus-border: #5b99e4;
+            --input-focus-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.35);
+
+            --primary-btn-bg: #0d6efd;
+            --primary-btn-hover-bg: #3b82f6;
+            --secondary-btn-bg: #6c757d;
+            --secondary-btn-hover-bg: #858c93;
+            --danger-btn-bg: #dc3545;
+            --danger-btn-hover-bg: #e45d6a;
+            --warning-btn-bg: #ffc107;
+            --warning-btn-hover-bg: #ffd041;
+            --success-btn-bg: #198754;
+            --success-btn-hover-bg: #20a768;
         }
 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            max-width: 700px; /* Tăng chiều rộng tối đa một chút */
+            margin: 30px auto; /* Tăng margin trên dưới */
+            padding: 20px; /* Tăng padding */
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s ease, color 0.3s ease;
+            line-height: 1.6; /* Cải thiện khả năng đọc */
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: var(--text-color);
+        }
+
+        /* --- Theme Toggle Switch --- */
         .theme-toggle {
-            margin-bottom: 20px;
-            text-align: right;
+            display: flex; /* Sắp xếp chữ và switch trên cùng hàng */
+            justify-content: flex-end; /* Đẩy sang phải */
+            align-items: center; /* Căn giữa theo chiều dọc */
+            margin-bottom: 25px;
+            gap: 10px; /* Khoảng cách giữa chữ và switch */
         }
 
-        .group-management {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px; /* Chiều rộng switch */
+            height: 26px; /* Chiều cao switch */
         }
 
-        .add-card {
-            margin-bottom: 20px;
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
         }
 
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px; /* Kích thước chấm tròn */
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-btn-bg); /* Màu khi bật */
+        }
+
+        input:focus + .slider {
+            box-shadow: 0 0 1px var(--primary-btn-bg);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px); /* Khoảng cách di chuyển chấm tròn */
+        }
+
+        /* Rounded sliders */
+        .slider.round {
+            border-radius: 26px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+
+        /* --- Input Fields & Select --- */
         input[type="text"], select {
-            width: 200px;
-            padding: 8px;
-            margin-right: 10px;
+            display: block; /* Hiển thị trên một dòng riêng */
+            width: 100%; /* Chiếm toàn bộ chiều rộng có sẵn */
+            padding: 10px 12px; /* Tăng padding */
+            margin-bottom: 10px; /* Khoảng cách dưới */
+            font-size: 1rem;
             background-color: var(--input-bg);
             color: var(--input-text);
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--input-border);
+            border-radius: 6px; /* Bo góc nhiều hơn */
+            box-sizing: border-box; /* Quan trọng để padding không làm tăng kích thước */
+            transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
         }
 
-        button {
-            padding: 8px 15px;
-            color: var(--button-text);
-            background-color: var(--button-bg);
-            border: none;
-            border-radius: 4px;
+        input[type="text"]:focus, select:focus {
+            border-color: var(--input-focus-border);
+            outline: 0;
+            box-shadow: var(--input-focus-shadow);
+        }
+
+        select {
             cursor: pointer;
         }
 
+        /* --- Buttons --- */
+        button {
+            padding: 10px 18px; /* Tăng padding */
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--button-text); /* Sẽ bị ghi đè bởi class cụ thể */
+            background-color: var(--secondary-btn-bg); /* Màu mặc định */
+            border: none;
+            border-radius: 6px; /* Đồng bộ bo góc */
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            margin-right: 5px; /* Khoảng cách nhỏ giữa các nút */
+            margin-bottom: 5px; /* Khoảng cách khi nút xuống dòng */
+        }
+
         button:hover {
-            background-color: var(--hover-bg);
+            background-color: var(--secondary-btn-hover-bg); /* Hover mặc định */
+            /* transform: translateY(-1px); /* Hiệu ứng nhấc lên nhẹ */
+        }
+
+        button:active {
+            transform: scale(0.98); /* Hiệu ứng nhấn xuống */
+        }
+
+        /* Button Specific Colors */
+        .group-management button:first-of-type, /* Nút Tạo nhóm */
+        .add-card button, /* Nút Thêm thẻ */
+        #quiz-check-btn { /* Nút Kiểm tra/Tiếp theo/Thử lại */
+            background-color: var(--primary-btn-bg);
+            color: var(--primary-btn-text);
+        }
+        .group-management button:first-of-type:hover,
+        .add-card button:hover,
+        #quiz-check-btn:hover {
+            background-color: var(--primary-btn-hover-bg);
+        }
+
+        .delete-group-btn,
+        .flashcard button { /* Nút xóa thẻ */
+            background-color: var(--danger-btn-bg);
+            color: var(--danger-btn-text);
+            padding: 6px 12px; /* Nút xóa nhỏ hơn */
+            font-size: 0.85rem;
+        }
+        .delete-group-btn:hover,
+        .flashcard button:hover {
+            background-color: var(--danger-btn-hover-bg);
+        }
+
+        .pause-button {
+            background-color: var(--warning-btn-bg);
+            color: var(--warning-btn-text);
+        }
+        .pause-button:hover {
+            background-color: var(--warning-btn-hover-bg);
+        }
+
+        .resume-button,
+        #start-quiz-btn { /* Nút Bắt đầu/Tiếp tục Quiz */
+            background-color: var(--success-btn-bg);
+            color: var(--success-btn-text);
+        }
+        .resume-button:hover,
+        #start-quiz-btn:hover {
+            background-color: var(--success-btn-hover-bg);
+        }
+
+        /* --- Layout Sections --- */
+        .group-management {
+            margin-bottom: 30px; /* Tăng khoảng cách */
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--card-bg); /* Nền nhẹ */
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-wrap: wrap; /* Cho phép xuống dòng */
+            gap: 10px; /* Khoảng cách giữa các item */
+            align-items: center; /* Căn giữa các item */
+        }
+        /* Điều chỉnh input và select trong group management */
+        .group-management input[type="text"],
+        .group-management select {
+            flex: 1 1 180px; /* Cho phép co giãn, cơ sở 180px */
+            margin-bottom: 0; /* Bỏ margin bottom vì đã có gap */
+            width: auto; /* Để flex quản lý */
+        }
+        .group-management button {
+            flex-shrink: 0; /* Không co lại */
+            margin-bottom: 0;
+        }
+
+        .add-card {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--card-bg);
+            box-shadow: var(--shadow-sm);
+        }
+        .add-card input[type="text"] {
+            margin-bottom: 15px; /* Khoảng cách giữa 2 input */
+        }
+        .add-card button {
+            width: 100%; /* Nút thêm thẻ chiếm hết chiều rộng */
+        }
+
+        #quiz-controls {
+            text-align: center; /* Căn giữa nút Start/Resume */
+            margin-bottom: 20px;
+        }
+        #quiz-controls button {
+            padding: 12px 25px; /* Nút to hơn */
+            font-size: 1.1rem;
+        }
+
+        /* --- Flashcard Styling --- */
+        #flashcards {
+            margin-top: 20px;
         }
 
         .flashcard {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            padding: 15px;
-            margin: 10px 0;
-            cursor: pointer;
-            transition: 0.3s;
+            padding: 15px 20px; /* Tăng padding */
+            margin-bottom: 15px; /* Khoảng cách giữa các thẻ */
+            border-radius: 8px; /* Đồng bộ bo góc */
+            box-shadow: var(--shadow-sm);
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
             word-wrap: break-word;
-            white-space: normal;
-            border-radius: 5px;
-        }
-
-        .flashcard input[type="text"] {
-            width: 100%;
-            box-sizing: border-box;
-            background-color: var(--input-bg);
-            color: var(--input-text);
-            border: 1px solid var(--border-color);
+            position: relative; /* Để định vị nút xóa */
         }
 
         .flashcard:hover {
-            box-shadow: 0 2px 10px rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow-md);
+            /* transform: translateY(-2px); */ /* Hiệu ứng nổi lên nhẹ khi hover */
+        }
+
+        .flashcard strong {
+            margin-right: 5px;
+            color: var(--text-color);
+        }
+
+        .flashcard input[type="text"] {
+            width: calc(100% - 30px); /* Trừ đi padding của thẻ */
+            margin: 5px 0 10px 0; /* Khoảng cách trên dưới */
+            padding: 6px 8px; /* Padding nhỏ hơn cho input trong thẻ */
+            font-size: 0.95rem;
+            background-color: var(--input-bg); /* Đảm bảo nền input đúng */
+            color: var(--input-text);
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+        }
+        .flashcard input[type="text"]:focus {
+            box-shadow: none; /* Bỏ shadow khi focus input trong thẻ */
+            border-color: var(--input-focus-border);
+        }
+
+        .flashcard .answer-display {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed var(--border-color); /* Phân cách câu trả lời */
+        }
+
+        .flashcard button { /* Nút xóa thẻ */
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            opacity: 0.7; /* Hơi mờ đi */
+            transition: opacity 0.2s ease;
+        }
+        .flashcard:hover button {
+            opacity: 1; /* Hiện rõ khi hover thẻ */
         }
 
         .hidden {
-            display: none;
+            display: none !important; /* Dùng !important để đảm bảo ghi đè */
         }
 
+        /* --- Quiz Container --- */
         #quiz-container {
             margin-top: 30px;
-            padding: 20px;
+            padding: 25px; /* Tăng padding */
             background: var(--card-bg);
             border-radius: 8px;
             border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-md); /* Shadow rõ hơn cho quiz */
+        }
+
+        #quiz-question {
+            font-size: 1.3rem; /* Câu hỏi to hơn */
+            font-weight: 500;
+            margin-bottom: 20px;
         }
 
         #quiz-answer {
-            padding: 8px;
-            width: 300px;
-            margin: 10px 0;
+            width: calc(100% - 24px); /* Chiếm gần hết chiều rộng */
+            padding: 10px 12px;
+            margin: 15px 0;
             background-color: var(--input-bg);
             color: var(--input-text);
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        #quiz-answer:focus {
+            border-color: var(--input-focus-border);
+            outline: 0;
+            box-shadow: var(--input-focus-shadow);
         }
 
+        #quiz-feedback {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            min-height: 50px; /* Chiều cao tối thiểu để tránh nhảy layout */
+            transition: background-color 0.3s ease; /* Transition cho feedback */
+        }
+
+        #quiz-score {
+            margin-top: 15px;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        /* Quiz Feedback Colors */
         .correct {
-            color: #4CAF50;
+            color: var(--success-btn-bg); /* Màu xanh lá */
             font-weight: bold;
         }
 
         .wrong {
-            color: #f44336;
+            color: var(--danger-btn-bg); /* Màu đỏ */
             font-weight: bold;
         }
-
-        #group-select {
-            flex-grow: 1;
-            min-width: 200px;
+        #quiz-feedback .wrong + div { /* Các dòng dưới chữ "Sai rồi" */
+            margin-top: 8px;
+            font-size: 0.95rem;
+        }
+        #quiz-feedback .wrong + div span[style*="color: red"] { /* Từ đúng màu đỏ */
+            background-color: rgba(220, 53, 69, 0.1); /* Nền đỏ nhạt */
+            padding: 1px 3px;
+            border-radius: 3px;
+        }
+        #quiz-feedback .wrong + div s[style*="color: grey"] { /* Từ sai gạch ngang */
+            opacity: 0.7;
         }
 
-        .quiz-button {
-            background: #2196F3;
-            color: white;
+
+        /* --- Animations (Giữ nguyên hoặc tinh chỉnh nếu cần) --- */
+        @keyframes correct-pulse {
+            0% { transform: scale(1); background-color: rgba(25, 135, 84, 0.1); } /* Nền xanh nhạt */
+            50% { transform: scale(1.02); background-color: rgba(25, 135, 84, 0.2); }
+            100% { transform: scale(1); background-color: rgba(25, 135, 84, 0.1); }
         }
 
-        .delete-group-btn {
-            background: #d32f2f;
-            color: white;
+        @keyframes wrong-shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+            20%, 40%, 60%, 80% { transform: translateX(4px); }
         }
 
-        .delete-group-btn:hover {
-            background: #b71c1c;
-        }
-        
-        .resume-button { 
-            background: #4CAF50; 
-            color: white; 
-            margin-left: 10px; 
+        .animate-correct {
+            animation: correct-pulse 0.6s ease-in-out;
+            background-color: rgba(25, 135, 84, 0.1); /* Nền xanh nhạt khi đúng */
         }
 
-        .resume-button:hover { 
-            background: #388E3C; 
+        .animate-wrong {
+            /* Animation sẽ áp dụng cho span .wrong bên trong #quiz-feedback */
+            animation: wrong-shake 0.5s ease-in-out;
+            /* Nền đỏ cho toàn bộ feedback khi sai */
+            background-color: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
         }
 
-        .pause-button { 
-            background-color: var(--pause-bg); 
-            color: white; 
-            margin-left: 10px; 
+        /* Loại bỏ animation cũ trên #quiz-feedback trực tiếp */
+        /* #quiz-feedback.animate-wrong { ... } */
+
+        /* Áp dụng animation rung lắc cho span .wrong */
+        #quiz-feedback span.wrong.animate-wrong {
+            display: inline-block; /* Cần thiết để transform hoạt động */
+            animation: wrong-shake 0.5s ease-in-out;
         }
-        .pause-button:hover { 
-            background-color: var(--pause-hover-bg); 
+
+        /* --- Responsive (Ví dụ đơn giản) --- */
+        @media (max-width: 600px) {
+            body {
+                padding: 15px;
+                margin: 15px auto;
+            }
+            .group-management {
+                flex-direction: column; /* Xếp chồng lên nhau trên màn hình nhỏ */
+                align-items: stretch; /* Kéo dài các item */
+            }
+            .group-management input[type="text"],
+            .group-management select,
+            .group-management button {
+                width: 100%; /* Chiếm hết chiều rộng */
+                margin-right: 0;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            #quiz-answer {
+                width: calc(100% - 20px); /* Điều chỉnh lại */
+            }
         }
 
     </style>
@@ -177,10 +482,13 @@
 <body>
     <!-- Toggle theme switch -->
     <div class="theme-toggle">
-        <label>
-            <input type="checkbox" id="theme-switch" onchange="toggleTheme()"> Dark Mode
+        <span>Chế độ tối</span>
+        <label class="switch">
+            <input type="checkbox" id="theme-switch" onchange="toggleTheme()">
+            <span class="slider round"></span>
         </label>
     </div>
+    
     <div class="group-management">
         <input type="text" id="new-group" placeholder="Tên nhóm mới">
         <button onclick="createGroup()">Tạo nhóm</button>
@@ -223,111 +531,111 @@ const GROUP_STORE_NAME = 'groups';
 let db; // Biến lưu trữ đối tượng database
 
 // Mở (hoặc tạo) cơ sở dữ liệu
-function openDB() {
-    return new Promise((resolve, reject) => {
-        if (db) { // Nếu đã mở, trả về ngay
-            return resolve(db);
-        }
-        console.log(`Mở ${DB_NAME} version ${DB_VERSION}`);
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            if (db) { // Nếu đã mở, trả về ngay
+                return resolve(db);
+            }
+            console.log(`Mở ${DB_NAME} version ${DB_VERSION}`);
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-        request.onerror = (event) => {
-            console.error("Lỗi khi mở IndexedDB:", event.target.error);
-            reject("Lỗi khi mở DB");
-        };
+            request.onerror = (event) => {
+                console.error("Lỗi khi mở IndexedDB:", event.target.error);
+                reject("Lỗi khi mở DB");
+            };
 
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            console.log("IndexedDB đã mở thành công.");
-            resolve(db);
-        };
+            request.onsuccess = (event) => {
+                db = event.target.result;
+                console.log("IndexedDB đã mở thành công.");
+                resolve(db);
+            };
 
         // Chỉ chạy khi tạo DB lần đầu hoặc nâng cấp version
-        request.onupgradeneeded = (event) => {
-            console.log("Chạy onupgradeneeded...");
-            const tempDb = event.target.result;
-            if (!tempDb.objectStoreNames.contains(GROUP_STORE_NAME)) {
-                console.log(`Tạo object store: ${GROUP_STORE_NAME}`);
-                tempDb.createObjectStore(GROUP_STORE_NAME, { keyPath: 'id' });
-            }
-        };
-    });
-}
+            request.onupgradeneeded = (event) => {
+                console.log("Chạy onupgradeneeded...");
+                const tempDb = event.target.result;
+                if (!tempDb.objectStoreNames.contains(GROUP_STORE_NAME)) {
+                    console.log(`Tạo object store: ${GROUP_STORE_NAME}`);
+                    tempDb.createObjectStore(GROUP_STORE_NAME, { keyPath: 'id' });
+                }
+            };
+        });
+    }
 
-async function getAllGroupsDB() {
-    const dbInstance = await openDB();
-    return new Promise((resolve, reject) => {
-        const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readonly');
-        const store = transaction.objectStore(GROUP_STORE_NAME);
-        const request = store.getAll(); // Lấy tất cả object
+    async function getAllGroupsDB() {
+        const dbInstance = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readonly');
+            const store = transaction.objectStore(GROUP_STORE_NAME);
+            const request = store.getAll(); // Lấy tất cả object
 
-        request.onerror = (event) => {
-            console.error("Lỗi khi lấy tất cả nhóm:", event.target.error);
-            reject("Lỗi đọc dữ liệu nhóm");
-        };
+            request.onerror = (event) => {
+                console.error("Lỗi khi lấy tất cả nhóm:", event.target.error);
+                reject("Lỗi đọc dữ liệu nhóm");
+            };
 
-        request.onsuccess = (event) => {
-            resolve(event.target.result || []); // Trả về mảng kết quả hoặc mảng rỗng
-        };
-    });
-}
+            request.onsuccess = (event) => {
+                resolve(event.target.result || []); // Trả về mảng kết quả hoặc mảng rỗng
+            };
+        });
+    }
 
-async function saveGroupDB(group) {
-    const dbInstance = await openDB();
-    return new Promise((resolve, reject) => {
-        const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readwrite');
-        const store = transaction.objectStore(GROUP_STORE_NAME);
-        const request = store.put(group); // put sẽ thêm mới hoặc cập nhật nếu key đã tồn tại
+    async function saveGroupDB(group) {
+        const dbInstance = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(GROUP_STORE_NAME);
+            const request = store.put(group); // put sẽ thêm mới hoặc cập nhật nếu key đã tồn tại
 
-        request.onerror = (event) => {
-            console.error("Lỗi khi lưu nhóm:", event.target.error, 'Data:', group); // Thêm log data
-            reject("Lỗi lưu dữ liệu nhóm");
-        };
+            request.onerror = (event) => {
+                console.error("Lỗi khi lưu nhóm:", event.target.error, 'Data:', group); // Thêm log data
+                reject("Lỗi lưu dữ liệu nhóm");
+            };
 
-        request.onsuccess = (event) => {
-            console.log('saveGroupDB thành công! Key:', event.target.result, 'Data:', group); // Thêm log data
-            resolve(event.target.result);
-        };
-    });
-}
+            request.onsuccess = (event) => {
+                console.log('saveGroupDB thành công! Key:', event.target.result, 'Data:', group); // Thêm log data
+                resolve(event.target.result);
+            };
+        });
+    }
 
-async function deleteGroupDB(groupId) {
-    const dbInstance = await openDB();
-    return new Promise((resolve, reject) => {
-        const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readwrite');
-        const store = transaction.objectStore(GROUP_STORE_NAME);
-        const request = store.delete(groupId);
+    async function deleteGroupDB(groupId) {
+        const dbInstance = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(GROUP_STORE_NAME);
+            const request = store.delete(groupId);
 
-        request.onerror = (event) => {
-            console.error("Lỗi khi xóa nhóm:", event.target.error);
-            reject("Lỗi xóa dữ liệu nhóm");
-        };
+            request.onerror = (event) => {
+                console.error("Lỗi khi xóa nhóm:", event.target.error);
+                reject("Lỗi xóa dữ liệu nhóm");
+            };
 
-        request.onsuccess = (event) => {
-            console.log(`Đã xóa nhóm ID: ${groupId}`);
-            resolve();
-        };
-    });
-}
+            request.onsuccess = (event) => {
+                console.log(`Đã xóa nhóm ID: ${groupId}`);
+                resolve();
+            };
+        });
+    }
 
 // Lấy một nhóm cụ thể bằng ID (hữu ích cho việc cập nhật thẻ)
-async function getGroupByIdDB(groupId) {
-    const dbInstance = await openDB();
-    return new Promise((resolve, reject) => {
-        const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readonly');
-        const store = transaction.objectStore(GROUP_STORE_NAME);
-        const request = store.get(groupId);
+    async function getGroupByIdDB(groupId) {
+        const dbInstance = await openDB();
+        return new Promise((resolve, reject) => {
+            const transaction = dbInstance.transaction(GROUP_STORE_NAME, 'readonly');
+            const store = transaction.objectStore(GROUP_STORE_NAME);
+            const request = store.get(groupId);
         
-        request.onerror = (event) => {
-            console.error(`Lỗi khi lấy nhóm ID ${groupId}:`, event.target.error);
-            reject("Lỗi đọc dữ liệu nhóm");
-        };
+            request.onerror = (event) => {
+                console.error(`Lỗi khi lấy nhóm ID ${groupId}:`, event.target.error);
+                reject("Lỗi đọc dữ liệu nhóm");
+            };
 
-        request.onsuccess = (event) => {
-            resolve(event.target.result); // Trả về group object hoặc undefined nếu không tìm thấy
-        };
-    });
-}
+            request.onsuccess = (event) => {
+                resolve(event.target.result); // Trả về group object hoặc undefined nếu không tìm thấy
+            };
+        });
+    }
         
         let groups = [];
         let currentGroupId = 'default';
@@ -633,46 +941,67 @@ async function getGroupByIdDB(groupId) {
 
             quizAnswerInput.disabled = true; // Vô hiệu hóa ô nhập tạm thời
             quizPauseButton.disabled = true; // Vô hiệu hóa Pause khi đang xử lý
-
-            if (userAnswer === correctAnswer) {
-                currentCard.correctStreak++;
-                if (currentCard.correctStreak >= 2) {
-                    if (!currentCard.isMastered) { // Chỉ tăng masteredCount nếu thẻ chưa được master trước đó
-                        currentCard.isMastered = true;
-                        masteredCount++;
-                        updateScoreDisplay();
+// Xóa animation cũ trước khi thêm mới
+            quizFeedback.classList.remove('animate-correct', 'animate-wrong');
+// Dùng requestAnimationFrame để đảm bảo class được xóa trước khi thêm lại
+            requestAnimationFrame(() => {
+                if (userAnswer === correctAnswer) {
+                    currentCard.correctStreak++;
+                    if (currentCard.correctStreak >= 2) {
+                        if (!currentCard.isMastered) {
+                            currentCard.isMastered = true;
+                            masteredCount++;
+                            updateScoreDisplay();
+                        }
+                        quizFeedback.innerHTML = `<span class="correct">Đúng rồi! Đã thuộc câu này! 🎉 (${currentCard.correctStreak}/2)</span><br>Nhấn Enter hoặc nút 'Tiếp theo' để qua câu sau.`;
+                    } else {
+                        quizFeedback.innerHTML = `<span class="correct">Đúng rồi! 👍 (Lần ${currentCard.correctStreak}/2)</span><br>Nhấn Enter hoặc nút 'Tiếp theo' để qua câu sau.`;
                     }
-                    quizFeedback.innerHTML = `<span class="correct">Đúng rồi! Đã thuộc câu này! 🎉 (${currentCard.correctStreak}/2)</span><br>Nhấn Enter hoặc nút 'Tiếp theo' để qua câu sau.`;
-                } else {
-                    quizFeedback.innerHTML = `<span class="correct">Đúng rồi! 👍 (Lần ${currentCard.correctStreak}/2)</span><br>Nhấn Enter hoặc nút 'Tiếp theo' để qua câu sau.`;
-                }
 
-                // Cho phép chuyển câu tiếp theo
-                quizCheckButton.textContent = 'Tiếp theo';
-                quizCheckButton.onclick = showNextQuestion;
-                quizCheckButton.focus(); // Focus vào nút "Tiếp theo"
-                quizPauseButton.disabled = false; // Kích hoạt lại Pause
+                        // Thêm animation đúng
+                        quizFeedback.classList.add('animate-correct');
 
-            } else {
-                // Trả lời sai, reset streak và yêu cầu thử lại
-                currentCard.correctStreak = 0;
-                quizFeedback.innerHTML = `
-                    <span class="wrong">Sai rồi 😢</span>
-                    <div>Đáp án đúng: ${originalCorrectAnswer}</div>
-                    <div>So sánh: ${highlightDiff(userAnswer, originalCorrectAnswer)}</div>
-                    <br><strong>Hãy thử lại câu này!</strong>
-                `;
+                        quizCheckButton.textContent = 'Tiếp theo';
+                        quizCheckButton.onclick = showNextQuestion;
+                        quizCheckButton.focus();
+                        quizPauseButton.disabled = false;
 
-                // Giữ nguyên câu hỏi, cho phép nhập lại
-                quizCheckButton.textContent = 'Thử lại'; // Đổi nút thành "Thử lại"
-                quizCheckButton.onclick = checkAnswer; // Vẫn gọi checkAnswer khi nhấn nút
-                quizAnswerInput.disabled = false; // Kích hoạt lại ô nhập
-                quizAnswerInput.focus(); // Focus lại ô nhập
-                quizAnswerInput.select(); // Chọn toàn bộ text để dễ sửa
-                quizPauseButton.disabled = false; // Kích hoạt lại Pause
-            }
+                    } else {
+                        currentCard.correctStreak = 0;
+                        quizFeedback.innerHTML = `
+                            <span class="wrong">Sai rồi 😢</span>
+                            <div>Đáp án đúng: ${originalCorrectAnswer}</div>
+                            <div>So sánh: ${highlightDiff(userAnswer, originalCorrectAnswer)}</div>
+                            <br><strong>Hãy thử lại câu này!</strong>
+                        `;
+
+                        // Thêm animation sai
+                        // Lấy phần tử span chứa chữ "Sai rồi" để thêm animation
+                        const wrongSpan = quizFeedback.querySelector('.wrong');
+                        if (wrongSpan) {
+                            wrongSpan.classList.add('animate-wrong');
+                        }
+
+
+                        quizCheckButton.textContent = 'Thử lại';
+                        quizCheckButton.onclick = checkAnswer;
+                        quizAnswerInput.disabled = false;
+                        quizAnswerInput.focus();
+                        quizAnswerInput.select();
+                        quizPauseButton.disabled = false;
+                    }
+
+                    setTimeout(() => {
+                             quizFeedback.classList.remove('animate-correct');
+                             const wrongSpan = quizFeedback.querySelector('.wrong');
+                             if (wrongSpan) {
+                                 wrongSpan.classList.remove('animate-wrong');
+                             }
+                         }, 600); // Thời gian phải lớn hơn hoặc bằng thời gian animation
+                    
+                        });
         }
-
+    
         function updateScoreDisplay() {
             quizScoreDisplay.textContent = `Đã thuộc: ${masteredCount}/${quizSessionCards.length}`;
         }
@@ -816,7 +1145,7 @@ async function getGroupByIdDB(groupId) {
                 resumeButton = document.createElement('button');
                 resumeButton.id = 'resume-quiz-btn';
                 resumeButton.className = 'resume-button';
-                resumeButton.textContent = `Tiếp tục Quiz (${groupName} - ${savedProgress.mastered}/${savedProgress.sessionCards.length} thuộc)`;
+                resumeButton.textContent = `Tiếp tục Quiz (${groupName} - ${savedProgress.mastered}/${savedProgress.cardIds.length} thuộc)`;
                 resumeButton.title = `Lưu lúc: ${savedTime}`;
                 resumeButton.onclick = resumeQuiz;
 
@@ -1114,13 +1443,13 @@ async function getGroupByIdDB(groupId) {
              }
          });
         // --- KẾT THÚC DI CHUYỂN EVENT LISTENERS ---
-    } catch (error) {
-        console.error("Lỗi khởi tạo ứng dụng với IndexedDB:", error);
-        alert("Không thể tải dữ liệu nhóm. Vui lòng thử tải lại trang.");
-        // Có thể hiển thị thông báo lỗi trên UI
-    }
-}  
-document.addEventListener('DOMContentLoaded', initializeApp); // Listener này giữ nguyên
+            } catch (error) {
+                console.error("Lỗi khởi tạo ứng dụng với IndexedDB:", error);
+                alert("Không thể tải dữ liệu nhóm. Vui lòng thử tải lại trang.");
+                // Có thể hiển thị thông báo lỗi trên UI
+            }
+        }  
+        document.addEventListener('DOMContentLoaded', initializeApp); // Listener này giữ nguyên
     </script>
 </body>
 </html>
